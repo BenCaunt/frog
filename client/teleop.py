@@ -9,7 +9,7 @@ class Teleop:
         pygame.joystick.init()
         
         # Initialize Zenoh
-        self.session = zenoh.open()
+        self.session = zenoh.open(zenoh.Config())
         self.publisher = self.session.declare_publisher('robot/cmd')
         
         # Controller settings
@@ -50,6 +50,9 @@ class Teleop:
                         'x': forward,
                         'theta': rotation
                     }
+
+                    print(cmd)
+                    
                     
                     # Publish command
                     self.publisher.put(json.dumps(cmd))

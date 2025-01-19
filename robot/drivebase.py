@@ -68,6 +68,7 @@ class DriveBase:
 def cmd_callback(sample):
     try:
         data = json.loads(sample.payload.decode('utf-8'))
+        print(data)
         drivebase.drive(data['x'], data['theta'])
     except Exception as e:
         print(f"Error processing command: {e}")
