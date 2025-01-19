@@ -2,8 +2,8 @@
 MOTOR_PORTS = {
     'front_left': 0,
     'front_right': 1,
-    'back_left': 2,
-    'back_right': 3
+    'back_left': 3,
+    'back_right': 2
 }
 
 # Motor direction flags (True = reversed)
