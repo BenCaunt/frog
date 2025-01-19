@@ -9,7 +9,6 @@ class Teleop:
         pygame.joystick.init()
         
         # Initialize Zenoh
-        zenoh.init_log_from_env_or("error")
         self.session = zenoh.open(zenoh.Config())
         self.publisher = self.session.declare_publisher('robot/cmd')
         

@@ -9,8 +9,8 @@ class DriveBase:
         self.pwm.set_pwm_freq(60)
         
         # Motor configuration
-        self.SERVO_MIN = 1050   
-        self.SERVO_MAX = 1950
+        self.SERVO_MIN = 150
+        self.SERVO_MAX = 600
         self.SERVO_NEUTRAL = (self.SERVO_MAX + self.SERVO_MIN) // 2
         
         # Motor ports (these can be adjusted during testing)
