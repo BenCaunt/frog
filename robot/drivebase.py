@@ -2,7 +2,7 @@ import time
 import zenoh
 import Adafruit_PCA9685
 import json
-from .constants import MOTOR_PORTS, MOTOR_REVERSED, SERVO_MIN, SERVO_MAX, SERVO_NEUTRAL
+from constants import MOTOR_PORTS, MOTOR_REVERSED, SERVO_MIN, SERVO_MAX, SERVO_NEUTRAL
 
 class DriveBase:
     def __init__(self, address=0x40, busnum=1):
