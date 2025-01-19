@@ -14,16 +14,19 @@ class MotorDebug:
         """
         Set motor speed (-1.0 to 1.0)
         """
+        # Get motor name from port
+        motor_name = next((name for name, p in self.motor_ports.items() if p == port), f"Unknown Port {port}")
+        
         # Reverse speed if motor is configured as reversed
-        for motor_name, motor_port in self.motor_ports.items():
-            if motor_port == port and self.motor_reversed[motor_name]:
+        for name, motor_port in self.motor_ports.items():
+            if motor_port == port and self.motor_reversed[name]:
                 speed = -speed
         
         # Convert -1.0 to 1.0 range to servo pulse range
         pulse = int(SERVO_NEUTRAL + (speed * (SERVO_MAX - SERVO_MIN) / 2))
         pulse = max(SERVO_MIN, min(SERVO_MAX, pulse))
         self.pwm.set_pwm(port, 0, pulse)
-        print(f"Set motor {port} to {pulse}")
+        print(f"Set motor {motor_name} (port {port}) to pulse {pulse}")
 
     def debug_sequence(self):
         """
