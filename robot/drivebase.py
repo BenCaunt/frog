@@ -78,7 +78,7 @@ if __name__ == "__main__":
     drivebase = DriveBase()
     
     # Initialize Zenoh
-    session = zenoh.open()
+    session = zenoh.open(zenoh.Config())
     sub = session.declare_subscriber('robot/cmd', cmd_callback)
     
     try:
