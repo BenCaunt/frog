@@ -42,6 +42,7 @@ class DriveBase:
         pulse = int(self.SERVO_NEUTRAL + (speed * (self.SERVO_MAX - self.SERVO_MIN) / 2))
         pulse = max(self.SERVO_MIN, min(self.SERVO_MAX, pulse))
         self.pwm.set_pwm(port, 0, pulse)
+        print(f"Set motor {port} to {pulse}")
     
     def drive(self, x, theta):
         """
