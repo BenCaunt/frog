@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import time
 import Adafruit_PCA9685
+import argparse
 from constants import MOTOR_PORTS, MOTOR_REVERSED, SERVO_MIN, SERVO_MAX, SERVO_NEUTRAL
 
 class MotorDebug:
@@ -61,8 +62,36 @@ class MotorDebug:
             for port in self.motor_ports.values():
                 self.set_motor(port, 0)
 
+    def forward_only_sequence(self):
+        """
+        Run all motors forward simultaneously
+        """
+        TEST_SPEED = 0.3  # Use a moderate speed for testing
+        
+        try:
+            print("\nRunning all motors forward. Press CTRL+C to stop...")
+            for motor_name, port in self.motor_ports.items():
+                print(f"Starting {motor_name} (Port {port})")
+                self.set_motor(port, TEST_SPEED)
+            
+            while True:
+                time.sleep(0.1)  # Keep running until interrupted
+                
+        except KeyboardInterrupt:
+            print("\nStopping all motors...")
+            for port in self.motor_ports.values():
+                self.set_motor(port, 0)
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Motor debug utility')
+    parser.add_argument('--forward-only', action='store_true', help='Run all motors forward simultaneously')
+    args = parser.parse_args()
+
     print("Starting motor debug sequence...")
     print("Press CTRL+C to stop")
     debugger = MotorDebug()
-    debugger.debug_sequence() 
+    
+    if args.forward_only:
+        debugger.forward_only_sequence()
+    else:
+        debugger.debug_sequence() 
