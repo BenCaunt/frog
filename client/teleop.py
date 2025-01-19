@@ -39,7 +39,7 @@ class Teleop:
                 if self.joystick:
                     # Get joystick values
                     forward = -self.apply_deadband(self.joystick.get_axis(1))  # Y axis
-                    rotation = -self.apply_deadband(self.joystick.get_axis(3))  # Right X axis
+                    rotation = -self.apply_deadband(self.joystick.get_axis(2))  # Right X axis
                     
                     # Scale to max speeds
                     forward *= self.max_linear

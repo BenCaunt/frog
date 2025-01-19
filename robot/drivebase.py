@@ -39,8 +39,8 @@ class DriveBase:
         x: forward/backward (-1.0 to 1.0)
         theta: rotation (-1.0 to 1.0)
         """
-        left = x + theta
-        right = x - theta
+        left = x - theta
+        right = x + theta
         
         # Normalize speeds if they exceed [-1, 1]
         max_magnitude = max(abs(left), abs(right))
