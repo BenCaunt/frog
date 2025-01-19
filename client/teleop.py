@@ -9,6 +9,7 @@ class Teleop:
         pygame.joystick.init()
         
         # Initialize Zenoh
+        zenoh.init_log_from_env_or("error")
         self.session = zenoh.open(zenoh.Config())
         self.publisher = self.session.declare_publisher('robot/cmd')
         
@@ -50,11 +51,10 @@ class Teleop:
                         'x': forward,
                         'theta': rotation
                     }
-
-                    print(cmd)
                     
-                    # Publish command as bytes
-                    self.publisher.put(bytes(json.dumps(cmd), 'utf-8'))
+                    # Publish command
+                    self.publisher.put(json.dumps(cmd))
+                    print(f"Published: {cmd}")
                 
                 time.sleep(0.02)  # 50Hz update rate
                 

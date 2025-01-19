@@ -65,10 +65,10 @@ class DriveBase:
         self.set_motor(self.MOTOR_PORTS['front_right'], right)
         self.set_motor(self.MOTOR_PORTS['back_right'], right)
 
-def cmd_callback(sample):
+def listener(sample):
     try:
-        data = json.loads(sample.payload.get_content_as_string())
-        print(data)
+        data = json.loads(sample.payload.to_string())
+        print(f"Received command: {data}")
         drivebase.drive(data['x'], data['theta'])
     except Exception as e:
         print(f"Error processing command: {e}")
@@ -78,9 +78,11 @@ if __name__ == "__main__":
     drivebase = DriveBase()
     
     # Initialize Zenoh
+    zenoh.init_log_from_env_or("error")
     session = zenoh.open(zenoh.Config())
-    sub = session.declare_subscriber('robot/cmd', cmd_callback)
+    sub = session.declare_subscriber('robot/cmd', listener)
     
+    print("DriveBase running. Press CTRL-C to quit...")
     try:
         while True:
             time.sleep(0.1)
