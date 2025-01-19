@@ -2,6 +2,7 @@ import time
 import zenoh
 import Adafruit_PCA9685
 import json
+from .constants import MOTOR_PORTS, MOTOR_REVERSED, SERVO_MIN, SERVO_MAX, SERVO_NEUTRAL
 
 class DriveBase:
     def __init__(self, address=0x40, busnum=1):
@@ -9,26 +10,13 @@ class DriveBase:
         self.pwm.set_pwm_freq(60)
         
         # Motor configuration
-        self.SEVO_MIDDLE = 400 
-        self.SERVO_MIN = self.SEVO_MIDDLE - 225
-        self.SERVO_MAX = self.SEVO_MIDDLE + 225
-        self.SERVO_NEUTRAL = (self.SERVO_MAX + self.SERVO_MIN) // 2
+        self.SERVO_MIN = SERVO_MIN
+        self.SERVO_MAX = SERVO_MAX
+        self.SERVO_NEUTRAL = SERVO_NEUTRAL
         
-        # Motor ports (these can be adjusted during testing)
-        self.MOTOR_PORTS = {
-            'front_left': 0,
-            'front_right': 1,
-            'back_left': 2,
-            'back_right': 3
-        }
-        
-        # Motor direction flags (True = reversed)
-        self.MOTOR_REVERSED = {
-            'front_left': False,
-            'front_right': False,
-            'back_left': False,
-            'back_right': False
-        }
+        # Motor ports and reversals
+        self.MOTOR_PORTS = MOTOR_PORTS
+        self.MOTOR_REVERSED = MOTOR_REVERSED
         
     def set_motor(self, port, speed):
         """
