@@ -9,9 +9,9 @@ MOTOR_PORTS = {
 # Motor direction flags (True = reversed)
 MOTOR_REVERSED = {
     'front_left': False,
-    'front_right': False,
+    'front_right': True,
     'back_left': False,
-    'back_right': False
+    'back_right': True,
 }
 
 # Servo/Motor PWM Configuration
