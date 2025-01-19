@@ -53,9 +53,8 @@ class Teleop:
 
                     print(cmd)
                     
-                    
-                    # Publish command
-                    self.publisher.put(json.dumps(cmd))
+                    # Publish command as bytes
+                    self.publisher.put(bytes(json.dumps(cmd), 'utf-8'))
                 
                 time.sleep(0.02)  # 50Hz update rate
                 

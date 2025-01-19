@@ -67,7 +67,7 @@ class DriveBase:
 
 def cmd_callback(sample):
     try:
-        data = json.loads(sample.payload.decode('utf-8'))
+        data = json.loads(sample.payload.get_content_as_string())
         print(data)
         drivebase.drive(data['x'], data['theta'])
     except Exception as e:
