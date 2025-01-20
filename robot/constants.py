@@ -23,7 +23,7 @@ SERVO_NEUTRAL = (SERVO_MAX + SERVO_MIN) // 2
 # Camera configuration
 CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 240
-CAMERA_FPS = 60
+CAMERA_FPS = 30
 
 # Zenoh keys
 CAMERA_FRAME_KEY = "robot/camera/frame"
