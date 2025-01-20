@@ -40,9 +40,9 @@ class Teleop:
     
     def _on_camera_frame(self, sample):
         """Callback for camera frames"""
-        # Decode JPEG image
         try:
-            np_arr = np.frombuffer(sample.payload, np.uint8)
+            # Convert Zenoh bytes to numpy array
+            np_arr = np.frombuffer(sample.payload.to_bytes(), np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             if frame is not None:
                 # Convert BGR to RGB for rerun
