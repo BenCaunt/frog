@@ -27,6 +27,6 @@ CAMERA_FPS = 30
 
 # Zenoh keys
 CAMERA_FRAME_KEY = "robot/camera/frame"
-CAMERA_UNDISTORTED_KEY = "robot/camera/undistorted"
-CAMERA_TAG_POSES_KEY = "robot/camera/tag_poses"
 ROBOT_TWIST_CMD_KEY = "robot/cmd"
+
+FLIP_FRAME = False

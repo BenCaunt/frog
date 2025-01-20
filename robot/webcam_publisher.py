@@ -7,10 +7,11 @@ from constants import (
     CAMERA_WIDTH,
     CAMERA_HEIGHT,
     CAMERA_FPS,
-    CAMERA_FRAME_KEY
+    CAMERA_FRAME_KEY,
+    FLIP_FRAME
 )
 
-FLIP_FRAME = True  # Flag to control frame flipping
+
 
 def main():
     # Initialize camera capture
