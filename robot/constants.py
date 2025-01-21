@@ -1,9 +1,9 @@
 # Motor ports (these can be adjusted during testing)
 MOTOR_PORTS = {
-    'front_left': 0,
-    'front_right': 1,
-    'back_left': 3,
-    'back_right': 2
+    'front_left': 2,
+    'front_right': 3,
+    'back_left': 1,
+    'back_right': 0
 }
 
 # Motor direction flags (True = reversed)
