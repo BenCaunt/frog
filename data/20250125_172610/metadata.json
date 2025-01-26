@@ -1,0 +1,12 @@
+{
+  "created_at": "2025-01-25T17:26:10.408254",
+  "frame_rate": 30,
+  "twist_rate": 20,
+  "robot_type": "tank_drive",
+  "control_dims": [
+    "x",
+    "y",
+    "theta"
+  ],
+  "description": "Tank drive robot exploration dataset"
+}

@@ -68,7 +68,7 @@ class Teleop:
                     
                     # Scale to max speeds
                     forward *= self.max_linear
-                    rotation *= self.max_angular
+                    rotation *= self.max_angular    
                     
                     # Create command message
                     cmd = {
