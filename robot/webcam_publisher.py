@@ -8,10 +8,28 @@ from constants import (
     CAMERA_HEIGHT,
     CAMERA_FPS,
     CAMERA_FRAME_KEY,
-    FLIP_FRAME
+    FLIP_FRAME,
+    CROP_TO_MONO,
+    CROP_TO_RIGHT_FRAME
 )
 
-
+def crop_frame_to_mono(frame):
+    """
+    Crops a stereo frame to a single camera view
+    Args:
+        frame: Input stereo frame
+    Returns:
+        Cropped monocular frame
+    """
+    # Calculate the midpoint - stereo frames are side by side
+    mid_x = frame.shape[1] // 2
+    
+    if CROP_TO_RIGHT_FRAME:
+        # Take the right half of the frame
+        return frame[:, mid_x:]
+    else:
+        # Take the left half of the frame
+        return frame[:, :mid_x]
 
 def main():
     # Initialize camera capture
@@ -47,6 +65,10 @@ def main():
                 if not ret:
                     print("Failed to grab frame")
                     break
+
+                # Crop to mono if enabled
+                if CROP_TO_MONO:
+                    frame = crop_frame_to_mono(frame)
 
                 # Flip frame if enabled
                 if FLIP_FRAME:
