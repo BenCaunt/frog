@@ -1,0 +1,1 @@
+TELEOP_PUBLISH_RATE = 60  # Hz

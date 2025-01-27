@@ -9,6 +9,8 @@ import threading
 from queue import Queue
 import logging
 
+from teleop_constants import TELEOP_PUBLISH_RATE
+
 class DatasetLogger:
     def __init__(self):
         # Create dataset directory with timestamp
@@ -55,7 +57,7 @@ class DatasetLogger:
         metadata = {
             "created_at": datetime.now().isoformat(),
             "frame_rate": 30,  # Assumed from your constants
-            "twist_rate": 20,  # Target rate for twist commands
+            "twist_rate": TELEOP_PUBLISH_RATE,  # Target rate for twist commands
             "robot_type": "tank_drive",
             "control_dims": ["x", "y", "theta"],  # Standard format for all robots
             "description": "Tank drive robot exploration dataset"
