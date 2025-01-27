@@ -27,7 +27,7 @@ CAMERA_FPS = 30
 
 # Camera cropping options
 CROP_TO_MONO = True  # If True, crops stereo frame to single camera
-CROP_TO_RIGHT_FRAME = False  # If True, uses right camera, if False uses left camera
+CROP_TO_RIGHT_FRAME = True  # If True, uses right camera, if False uses left camera
 
 # Zenoh keys
 CAMERA_FRAME_KEY = "robot/camera/frame"
