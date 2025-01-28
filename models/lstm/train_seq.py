@@ -1,5 +1,3 @@
-# train_seq_multi.py
-
 import os
 import argparse
 import torch
@@ -7,12 +5,13 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import models
+from torch.nn.parallel import DataParallel
+import torch.cuda.amp as amp
 
 from datetime import datetime
-from multi_seq_dataset import MultiSequenceRobotDataset  # <-- put the dataset class here or inline
+from multi_seq_dataset import MultiSequenceRobotDataset
 from tqdm import tqdm
 
-# 1) Our CNN+LSTM model
 class CNNLSTMModel(nn.Module):
     def __init__(self, hidden_size=128, num_layers=1):
         super().__init__()
@@ -40,20 +39,48 @@ class CNNLSTMModel(nn.Module):
         twist = self.fc(last_output)              # [batch, 3]
         return twist
 
-def train_one_epoch(model, dataloader, optimizer, criterion, device):
+def get_device(force_cpu=False):
+    """
+    Determine the best available device with priority: CUDA > MPS > CPU
+    """
+    if force_cpu:
+        return torch.device("cpu")
+    
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
+def train_one_epoch(model, dataloader, optimizer, criterion, device, scaler=None):
     model.train()
     total_loss = 0.0
-    for images, labels in tqdm(dataloader):
-        images = images.to(device)  # [B, seq_len, 3, 224, 224]
-        labels = labels.to(device)  # [B, 3]
+    progress_bar = tqdm(dataloader, desc='Training')
+    
+    for images, labels in progress_bar:
+        images = images.to(device, non_blocking=True)
+        labels = labels.to(device, non_blocking=True)
 
         optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+
+        if scaler is not None:  # Using mixed precision
+            with amp.autocast():
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+            
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:  # Regular training
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
         total_loss += loss.item()
+        progress_bar.set_postfix({'loss': f'{loss.item():.4f}'})
+
     return total_loss / len(dataloader)
 
 def main():
@@ -65,31 +92,89 @@ def main():
     parser.add_argument('--num-layers', type=int, default=1)
     parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--learning-rate', type=float, default=1e-4)
+    parser.add_argument('--force-cpu', action='store_true', help='Force CPU usage even if CUDA is available')
+    parser.add_argument('--mixed-precision', action='store_true', help='Enable automatic mixed precision training')
+    parser.add_argument('--num-workers', type=int, default=4, help='Number of data loading workers')
     args = parser.parse_args()
 
-    device = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
-    print(f"Device: {device}")
+    # Device setup
+    device = get_device(force_cpu=args.force_cpu)
+    print(f"Training on device: {device}")
+    
+    if device.type == "cuda":
+        print(f"GPU(s) available: {torch.cuda.device_count()}")
+        for i in range(torch.cuda.device_count()):
+            print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
+        print(f"CUDA version: {torch.version.cuda}")
+        
+        # Set optimal CUDA settings
+        torch.backends.cudnn.benchmark = True
+        if args.mixed_precision:
+            print("Using automatic mixed precision training")
 
-    # Build dataset
+    # Initialize mixed precision scaler if needed
+    scaler = amp.GradScaler() if device.type == "cuda" and args.mixed_precision else None
+
+    # Build dataset with pinned memory for faster GPU transfer
+    pin_memory = device.type == "cuda"
     dataset = MultiSequenceRobotDataset(parent_dir=args.parent_dir, seq_len=args.seq_len)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    dataloader = DataLoader(
+        dataset, 
+        batch_size=args.batch_size, 
+        shuffle=True, 
+        num_workers=args.num_workers,
+        pin_memory=pin_memory
+    )
     print(f"Loaded dataset from '{args.parent_dir}' with {len(dataset)} total sequences")
 
-    # Build model, optimizer, etc.
-    model = CNNLSTMModel(hidden_size=args.hidden_size, num_layers=args.num_layers).to(device)
+    # Build model
+    model = CNNLSTMModel(hidden_size=args.hidden_size, num_layers=args.num_layers)
+    
+    # Multi-GPU support
+    if device.type == "cuda" and torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs!")
+        model = DataParallel(model)
+    
+    model = model.to(device)
+
+    # Optimizer and loss
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
     criterion = nn.MSELoss()
 
-    # Train
-    for epoch in range(args.epochs):
-        loss_val = train_one_epoch(model, dataloader, optimizer, criterion, device)
-        print(f"Epoch {epoch+1}/{args.epochs}, Loss={loss_val:.4f}")
+    try:
+        # Training loop
+        best_loss = float('inf')
+        for epoch in range(args.epochs):
+            print(f"\nEpoch {epoch+1}/{args.epochs}")
+            loss_val = train_one_epoch(model, dataloader, optimizer, criterion, device, scaler)
+            print(f"Epoch {epoch+1}/{args.epochs}, Loss={loss_val:.4f}")
 
-    # Save
+            # Save best model
+            if loss_val < best_loss:
+                best_loss = loss_val
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                out_name = f"multi_seq_model_{timestamp}_best.pth"
+                # Save the model state dict (handle DataParallel if used)
+                torch.save(
+                    model.module.state_dict() if isinstance(model, DataParallel) else model.state_dict(),
+                    out_name
+                )
+                print(f"Saved best model to {out_name}")
+
+    except KeyboardInterrupt:
+        print("\nTraining interrupted by user")
+    finally:
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+
+    # Save final model
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_name = f"multi_seq_model_{timestamp}.pth"
-    torch.save(model.state_dict(), out_name)
-    print(f"Saved model to {out_name}")
+    out_name = f"multi_seq_model_{timestamp}_final.pth"
+    torch.save(
+        model.module.state_dict() if isinstance(model, DataParallel) else model.state_dict(),
+        out_name
+    )
+    print(f"Saved final model to {out_name}")
 
 if __name__ == "__main__":
     main()
