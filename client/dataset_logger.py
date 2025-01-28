@@ -15,7 +15,7 @@ class DatasetLogger:
     def __init__(self):
         # Create dataset directory with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.dataset_dir = Path("data") / timestamp
+        self.dataset_dir = Path("data") / f"{timestamp}_real"
         self.images_dir = self.dataset_dir / "images"
         self.images_dir.mkdir(parents=True, exist_ok=True)
         

@@ -5,25 +5,12 @@ import time
 import rerun as rr
 import numpy as np
 import cv2
-import torch
-from torchvision import transforms
-from PIL import Image
 import argparse
 from teleop_constants import TELEOP_PUBLISH_RATE
-
-class ImageToTwistModel(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        from torchvision import models
-        self.backbone = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        num_ftrs = self.backbone.fc.in_features
-        self.backbone.fc = torch.nn.Linear(num_ftrs, 3)
-
-    def forward(self, x):
-        return self.backbone(x)
+from model_interface import LSTMPredictor, create_predictor
 
 class Teleop:
-    def __init__(self, model_path=None):
+    def __init__(self, model_type=None, model_path=None, **model_kwargs):
         pygame.init()
         pygame.joystick.init()
         
@@ -46,12 +33,13 @@ class Teleop:
         self.max_angular = 0.8  # Maximum rotation speed
         
         # Model setup
-        self.model = None
-        self.transform = None
-        self.device = None
+        self.predictor = None
         self.latest_frame = None
-        if model_path:
-            self._setup_model(model_path)
+        self.model_enabled = False  # Track if model control is enabled
+        self.prev_x_button = False  # For toggle detection
+        if model_type and model_path:
+            self.predictor = create_predictor(model_type, model_path, **model_kwargs)
+            print(f"Initialized {model_type.upper()} predictor")
         
         # Try to find a joystick
         if pygame.joystick.get_count() > 0:
@@ -61,43 +49,6 @@ class Teleop:
         else:
             print("No controller found!")
             self.joystick = None
-    
-    def _setup_model(self, model_path: str):
-        """Initialize the model for inference"""
-        self.device = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
-        print(f"Using device: {self.device}")
-        
-        self.model = ImageToTwistModel().to(self.device)
-        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
-        self.model.eval()
-        
-        self.transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                              std=[0.229, 0.224, 0.225])
-        ])
-    
-    def _predict_twist(self, frame: np.ndarray) -> dict:
-        """Predict twist commands from an image using the loaded model"""
-        if self.model is None:
-            return None
-            
-        # Convert BGR to RGB and to PIL
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        image = Image.fromarray(frame_rgb)
-        
-        # Transform and predict
-        input_tensor = self.transform(image).unsqueeze(0).to(self.device)
-        
-        with torch.no_grad():
-            prediction = self.model(input_tensor)
-            pred_numpy = prediction.squeeze().cpu().numpy()
-                        
-            return {
-                'x': float(pred_numpy[0]),
-                'theta': float(pred_numpy[2])  # Skip y since we don't use it
-            }
     
     def _on_camera_frame(self, sample):
         """Callback for camera frames"""
@@ -124,12 +75,29 @@ class Teleop:
                 pygame.event.pump()
                 
                 if self.joystick:
-                    # Check if X button is pressed (button 0 on PS5 controller)
-                    use_model = self.joystick.get_button(0) and self.model is not None and self.latest_frame is not None
+                    # Handle model toggle with X button (button 0 on PS5 controller)
+                    x_button = self.joystick.get_button(0)
+                    if x_button and not self.prev_x_button:  # Button just pressed
+                        self.model_enabled = not self.model_enabled
+                        state = "enabled" if self.model_enabled else "disabled"
+                        print(f"Model control {state}")
+                        if self.model_enabled and isinstance(self.predictor, LSTMPredictor):
+                            self.predictor.reset_state()  # Reset LSTM state when enabling
+                    self.prev_x_button = x_button
+                    
+                    # Handle model disable with O button (button 1 on PS5 controller)
+                    if self.joystick.get_button(1) and self.model_enabled:
+                        self.model_enabled = False
+                        print("Model control disabled")
+                        if isinstance(self.predictor, LSTMPredictor):
+                            self.predictor.reset_state()
+                    
+                    # Use model if enabled and available
+                    use_model = self.model_enabled and self.predictor is not None and self.latest_frame is not None
                     
                     if use_model:
                         # Use model predictions
-                        cmd = self._predict_twist(self.latest_frame)
+                        cmd = self.predictor.predict(self.latest_frame)
                         if cmd:
                             self.publisher.put(json.dumps(cmd))
                             print(f"Model command: {cmd}")
@@ -151,6 +119,10 @@ class Teleop:
                         # Publish command
                         self.publisher.put(json.dumps(cmd))
                         print(f"Teleop command: {cmd}")
+                        
+                        # Reset LSTM state when using manual control
+                        if isinstance(self.predictor, LSTMPredictor):
+                            self.predictor.reset_state()
                 
                 time.sleep(1 / TELEOP_PUBLISH_RATE)
                 
@@ -166,10 +138,26 @@ class Teleop:
 
 def main():
     parser = argparse.ArgumentParser(description="Teleoperate the robot with optional model control")
-    parser.add_argument("--model", type=str, help="Optional path to trained model (.pth file)")
+    parser.add_argument("--model-type", type=str, choices=['cnn', 'lstm'], help="Type of model to use")
+    parser.add_argument("--model-path", type=str, help="Path to trained model (.pth file)")
+    parser.add_argument("--hidden-size", type=int, default=128, help="Hidden size for LSTM model")
+    parser.add_argument("--num-layers", type=int, default=1, help="Number of LSTM layers")
+    
     args = parser.parse_args()
     
-    teleop = Teleop(model_path=args.model)
+    # Only pass model kwargs if we're using a model
+    model_kwargs = {}
+    if args.model_type == 'lstm':
+        model_kwargs.update({
+            'hidden_size': args.hidden_size,
+            'num_layers': args.num_layers
+        })
+    
+    teleop = Teleop(
+        model_type=args.model_type,
+        model_path=args.model_path,
+        **model_kwargs
+    )
     teleop.run()
 
 if __name__ == "__main__":
