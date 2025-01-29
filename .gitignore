@@ -7,3 +7,6 @@ __pycache__/
 *.jpg
 *.png
 data/
+*.zip
+*.pth
+.DS_Store

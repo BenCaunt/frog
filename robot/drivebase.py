@@ -47,7 +47,11 @@ class DriveBase:
         if max_magnitude > 1.0:
             left /= max_magnitude
             right /= max_magnitude
-            
+
+        # clip to -0.5 to 0.5
+        left = max(-0.25, min(0.25, left))
+        right = max(-0.25, min(0.25, right))
+
         # Set motor speeds
         self.set_motor(self.MOTOR_PORTS['front_left'], left)
         self.set_motor(self.MOTOR_PORTS['back_left'], left)

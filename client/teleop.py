@@ -81,16 +81,22 @@ class Teleop:
                         self.model_enabled = not self.model_enabled
                         state = "enabled" if self.model_enabled else "disabled"
                         print(f"Model control {state}")
-                        if self.model_enabled and isinstance(self.predictor, LSTMPredictor):
-                            self.predictor.reset_state()  # Reset LSTM state when enabling
+                        if self.predictor:
+                            # Reset model state when toggling
+                            if isinstance(self.predictor, LSTMPredictor):
+                                self.predictor.reset_state()
+                            if not self.model_enabled:  # Only reset history when disabling
+                                self.predictor.reset_history()
                     self.prev_x_button = x_button
                     
                     # Handle model disable with O button (button 1 on PS5 controller)
                     if self.joystick.get_button(1) and self.model_enabled:
                         self.model_enabled = False
                         print("Model control disabled")
-                        if isinstance(self.predictor, LSTMPredictor):
-                            self.predictor.reset_state()
+                        if self.predictor:
+                            if isinstance(self.predictor, LSTMPredictor):
+                                self.predictor.reset_state()
+                            self.predictor.reset_history()
                     
                     # Use model if enabled and available
                     use_model = self.model_enabled and self.predictor is not None and self.latest_frame is not None
@@ -120,8 +126,8 @@ class Teleop:
                         self.publisher.put(json.dumps(cmd))
                         print(f"Teleop command: {cmd}")
                         
-                        # Reset LSTM state when using manual control
-                        if isinstance(self.predictor, LSTMPredictor):
+                        # Only reset LSTM state during manual control, keep history
+                        if self.predictor and isinstance(self.predictor, LSTMPredictor):
                             self.predictor.reset_state()
                 
                 time.sleep(1 / TELEOP_PUBLISH_RATE)
