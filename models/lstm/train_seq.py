@@ -13,12 +13,14 @@ from multi_seq_dataset import MultiSequenceRobotDataset
 from tqdm import tqdm
 
 class CNNLSTMModel(nn.Module):
-    def __init__(self, hidden_size=128, num_layers=1):
+    def __init__(self, hidden_size=128, num_layers=2, dropout=0.1):
         super().__init__()
         base_model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         self.feature_extractor = nn.Sequential(*list(base_model.children())[:-1])  # remove final FC
         self.lstm = nn.LSTM(input_size=512, hidden_size=hidden_size,
-                            num_layers=num_layers, batch_first=True)
+                            num_layers=num_layers, batch_first=True,
+                            dropout=dropout if num_layers > 1 else 0)  # LSTM dropout between layers
+        self.dropout = nn.Dropout(dropout)  # Additional dropout before final FC
         self.fc = nn.Linear(hidden_size, 3)
 
     def forward(self, x):
@@ -36,6 +38,7 @@ class CNNLSTMModel(nn.Module):
         outputs, (h_n, c_n) = self.lstm(feats)     # [batch, seq_len, hidden_size]
         # Last time step
         last_output = outputs[:, -1, :]           # [batch, hidden_size]
+        last_output = self.dropout(last_output)   # Apply dropout before final FC
         twist = self.fc(last_output)              # [batch, 3]
         return twist
 
@@ -108,6 +111,7 @@ def main():
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--hidden-size', type=int, default=128)
     parser.add_argument('--num-layers', type=int, default=1)
+    parser.add_argument('--dropout', type=float, default=0.2, help='Dropout probability')
     parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--learning-rate', type=float, default=1e-4)
     parser.add_argument('--force-cpu', action='store_true', help='Force CPU usage even if CUDA is available')
@@ -172,7 +176,7 @@ def main():
         has_validation = False
 
     # Build model
-    model = CNNLSTMModel(hidden_size=args.hidden_size, num_layers=args.num_layers)
+    model = CNNLSTMModel(hidden_size=args.hidden_size, num_layers=args.num_layers, dropout=args.dropout)
     
     # Multi-GPU support
     if device.type == "cuda" and torch.cuda.device_count() > 1:
