@@ -83,10 +83,28 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, scaler=None
 
     return total_loss / len(dataloader)
 
+def validate(model, dataloader, criterion, device):
+    model.eval()
+    total_loss = 0.0
+    progress_bar = tqdm(dataloader, desc='Validating')
+    
+    with torch.no_grad():
+        for images, labels in progress_bar:
+            images = images.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
+            
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            
+            total_loss += loss.item()
+            progress_bar.set_postfix({'loss': f'{loss.item():.4f}'})
+    
+    return total_loss / len(dataloader)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('parent_dir', type=str, help="Parent directory containing multiple subdirs of data.")
-    parser.add_argument('--seq-len', type=int, default=5)
+    parser.add_argument('--seq-len', type=int, default=16)
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--hidden-size', type=int, default=128)
     parser.add_argument('--num-layers', type=int, default=1)
@@ -115,17 +133,43 @@ def main():
     # Initialize mixed precision scaler if needed
     scaler = amp.GradScaler() if device.type == "cuda" and args.mixed_precision else None
 
-    # Build dataset with pinned memory for faster GPU transfer
+    # Build datasets with pinned memory for faster GPU transfer
     pin_memory = device.type == "cuda"
-    dataset = MultiSequenceRobotDataset(parent_dir=args.parent_dir, seq_len=args.seq_len)
-    dataloader = DataLoader(
-        dataset, 
+    
+    # Training dataset
+    train_dataset = MultiSequenceRobotDataset(
+        parent_dir=args.parent_dir,
+        seq_len=args.seq_len,
+        validation=False
+    )
+    train_loader = DataLoader(
+        train_dataset, 
         batch_size=args.batch_size, 
         shuffle=True, 
         num_workers=args.num_workers,
         pin_memory=pin_memory
     )
-    print(f"Loaded dataset from '{args.parent_dir}' with {len(dataset)} total sequences")
+    print(f"Loaded training dataset from '{args.parent_dir}' with {len(train_dataset)} total sequences")
+    
+    # Validation dataset
+    try:
+        val_dataset = MultiSequenceRobotDataset(
+            parent_dir=args.parent_dir,
+            seq_len=args.seq_len,
+            validation=True
+        )
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=args.num_workers,
+            pin_memory=pin_memory
+        )
+        print(f"Loaded validation dataset from '{args.parent_dir}' with {len(val_dataset)} total sequences")
+        has_validation = True
+    except ValueError:
+        print("No validation data found, training without validation")
+        has_validation = False
 
     # Build model
     model = CNNLSTMModel(hidden_size=args.hidden_size, num_layers=args.num_layers)
@@ -143,15 +187,25 @@ def main():
 
     try:
         # Training loop
-        best_loss = float('inf')
+        best_val_loss = float('inf')
         for epoch in range(args.epochs):
             print(f"\nEpoch {epoch+1}/{args.epochs}")
-            loss_val = train_one_epoch(model, dataloader, optimizer, criterion, device, scaler)
-            print(f"Epoch {epoch+1}/{args.epochs}, Loss={loss_val:.4f}")
+            
+            # Training phase
+            train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler)
+            print(f"Training Loss: {train_loss:.4f}")
+            
+            # Validation phase
+            if has_validation:
+                val_loss = validate(model, val_loader, criterion, device)
+                print(f"Validation Loss: {val_loss:.4f}")
+                current_loss = val_loss
+            else:
+                current_loss = train_loss
 
-            # Save best model
-            if loss_val < best_loss:
-                best_loss = loss_val
+            # Save best model based on validation loss (or training loss if no validation)
+            if current_loss < best_val_loss:
+                best_val_loss = current_loss
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 out_name = f"multi_seq_model_{timestamp}_best.pth"
                 # Save the model state dict (handle DataParallel if used)
