@@ -4,8 +4,10 @@ from torchvision import transforms, models
 from PIL import Image
 import numpy as np
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 import cv2
+import time
+import rerun as rr
 
 class TwistPredictor(ABC):
     """Abstract base class for all twist prediction models"""
@@ -23,6 +25,14 @@ class TwistPredictor(ABC):
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                               std=[0.229, 0.224, 0.225])
         ])
+        
+        # Sliding window for near-zero detection
+        self.reset_history()
+    
+    def reset_history(self):
+        """Reset the sliding window history"""
+        self.magnitude_history = []
+        self.last_prediction_time = None
     
     @abstractmethod
     def _create_model(self) -> nn.Module:
@@ -40,22 +50,76 @@ class TwistPredictor(ABC):
         """
         pass
     
-    def _process_prediction(self, pred_numpy: np.ndarray, epsilon: float = 0.05) -> Dict[str, float]:
-        """Common post-processing for predictions"""
-        # Check if prediction magnitude is near zero
+    def _log_window_stats(self, window_duration: float, magnitudes: List[float], 
+                         all_near_zero: bool, cmd: Dict[str, float]):
+        """Log window stats and commands to Rerun"""
+        # Log window stats
+        rr.log("window/duration", rr.Scalar(window_duration))
+        rr.log("window/sample_count", rr.Scalar(len(magnitudes)))
+        rr.log("window/all_near_zero", rr.Scalar(float(all_near_zero)))
+        
+        # Log all magnitudes in the window
+        for i, mag in enumerate(magnitudes):
+            rr.log(f"window/magnitude_{i}", rr.Scalar(mag))
+        
+        # Log the current command
+        rr.log("command/x", rr.Scalar(cmd['x']))
+        rr.log("command/theta", rr.Scalar(cmd['theta']))
+        
+        # Log whether we're in near-zero mode
+        rr.log("status/near_zero_mode", rr.Scalar(float(all_near_zero and window_duration >= 0.15)))
+    
+    def _process_prediction(self, pred_numpy: np.ndarray, epsilon: float = 0.15) -> Dict[str, float]:
+        """Common post-processing for predictions with sliding window for near-zero behavior"""
+        # Calculate magnitude of the prediction
         magnitude = np.sqrt(pred_numpy[0]**2 + pred_numpy[2]**2)
         
-        if magnitude < epsilon:
-            # If near zero, move forward slowly
-            return {
-                'x': 0.15,  # Small forward velocity
-                'theta': 0.0  # No rotation
+        # Update timing
+        current_time = time.time()
+        if self.last_prediction_time is None:
+            self.last_prediction_time = current_time
+            dt = 0.05  # Assume initial dt of 50ms
+        else:
+            dt = current_time - self.last_prediction_time
+            self.last_prediction_time = current_time
+        
+        # Update magnitude history
+        self.magnitude_history.append((magnitude, dt))
+        
+        # Remove old entries until we're within the window
+        window_duration = sum(dt for _, dt in self.magnitude_history)
+        while window_duration > 0.25 and len(self.magnitude_history) > 1:  # Keep at least one sample
+            _, removed_dt = self.magnitude_history.pop(0)
+            window_duration -= removed_dt
+        
+        # Check if all magnitudes in window are below epsilon
+        all_near_zero = all(mag < epsilon for mag, _ in self.magnitude_history)
+        window_full = window_duration >= 0.15  # Need at least 0.15 seconds of history
+        
+        # Get list of just magnitudes for logging
+        magnitudes = [mag for mag, _ in self.magnitude_history]
+        
+        # Debug prints
+        print(f"Window stats: duration={window_duration:.3f}s, samples={len(self.magnitude_history)}, "
+              f"all_near_zero={all_near_zero}, magnitudes={[f'{m:.3f}' for m in magnitudes]}")
+        
+        # Determine command based on conditions
+        if all_near_zero and window_full:
+            print("Near-zero behavior triggered!")
+            cmd = {
+                'x': float(pred_numpy[0]),  # Small forward velocity
+                'theta': 5.0 * pred_numpy[2]  # No rotation when uncertain
             }
         else:
-            return {
+            cmd = {
                 'x': float(pred_numpy[0]),
                 'theta': float(pred_numpy[2])  # Skip y since we don't use it
             }
+        
+        # Log all stats to Rerun
+        self._log_window_stats(window_duration, magnitudes, all_near_zero, cmd)
+        
+        return cmd
 
 class CNNPredictor(TwistPredictor):
     """ResNet18-based single frame predictor"""
