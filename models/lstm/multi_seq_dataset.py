@@ -12,23 +12,29 @@ class MultiSequenceRobotDataset(Dataset):
 
     Parent folder structure (example):
        data/
-         2025-01-27_00-15-21/
+         2025-01-27_00-15-21_real/
             images/
             sequences.json
-         2025-01-27_00-30-10/
+         2025-01-27_00-30-10_real/
+            images/
+            sequences.json
+         validate_2025-01-27_00-45-30_real/
             images/
             sequences.json
          ...
     Each subdirectory is treated separately: we do NOT assume continuity across subdirs.
+    Directories starting with 'validate_' are used for validation only.
     """
-
     def __init__(self, 
                  parent_dir: str,
-                 seq_len: int = 5):
+                 seq_len: int = 5,
+                 validation: bool = False):
         """
         parent_dir: Path to the parent data folder (e.g., "data/").
                     We'll scan all immediate subdirectories for "sequences.json" & "images/".
         seq_len: number of consecutive frames in a sequence.
+        validation: if True, only use directories starting with 'validate_',
+                   if False, exclude those directories.
 
         We store the data in:
            self.subdir_frames[i] = a list of (timestamp, img_full_path, [avg_x, avg_y, avg_t]) sorted by timestamp
@@ -37,6 +43,7 @@ class MultiSequenceRobotDataset(Dataset):
         super().__init__()
         self.parent_dir = parent_dir
         self.seq_len = seq_len
+        self.validation = validation
         self.subdir_frames = []  # list of lists
         self.indices = []        # global list of (subdir_idx, start_idx)
 
@@ -47,6 +54,10 @@ class MultiSequenceRobotDataset(Dataset):
             if os.path.isdir(os.path.join(parent_dir, d))
         ]
         subdirs.sort()  # optional, just to have a consistent order
+
+        # Filter based on validation flag
+        subdirs = [d for d in subdirs if 
+                  (d.startswith(os.path.join(parent_dir, "validate_")) == validation)]
 
         # 2) For each subdirectory, parse the frames
         subdir_count = 0
@@ -70,7 +81,7 @@ class MultiSequenceRobotDataset(Dataset):
                 print(f"Skipping {subdir_path}: missing sequences.json or images/ folder")
 
         if len(self.indices) == 0:
-            raise ValueError(f"No valid subdirectories found under {parent_dir} with seq_len={self.seq_len}")
+            raise ValueError(f"No valid {'validation' if validation else 'training'} subdirectories found under {parent_dir} with seq_len={self.seq_len}")
 
         # 3) Define image transform
         self.transform = transforms.Compose([
