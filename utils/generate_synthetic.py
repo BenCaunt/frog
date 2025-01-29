@@ -24,7 +24,7 @@ def process_image_task(args):
     # Define augmentation pipeline
     augmentation = transforms.Compose([
         transforms.ColorJitter(
-            brightness=0.4, contrast=0.05, saturation=0.02, hue=0.001
+            brightness=0.1, contrast=0.05, saturation=0.0, hue=0.0
         ),
         transforms.RandomErasing(p=0.25),
         transforms.RandomRotation(degrees=0.5),
