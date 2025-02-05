@@ -146,8 +146,8 @@ def main():
     parser = argparse.ArgumentParser(description="Teleoperate the robot with optional model control")
     parser.add_argument("--model-type", type=str, choices=['cnn', 'lstm'], help="Type of model to use")
     parser.add_argument("--model-path", type=str, help="Path to trained model (.pth file)")
-    parser.add_argument("--hidden-size", type=int, default=128, help="Hidden size for LSTM model")
-    parser.add_argument("--num-layers", type=int, default=1, help="Number of LSTM layers")
+    parser.add_argument("--hidden-size", type=int, default=64, help="Hidden size for LSTM model")
+    parser.add_argument("--num-layers", type=int, default=3, help="Number of LSTM layers")
     
     args = parser.parse_args()
     
