@@ -146,7 +146,7 @@ class CNNPredictor(TwistPredictor):
 class LSTMPredictor(TwistPredictor):
     """LSTM-based sequence predictor"""
     
-    def __init__(self, model_path: str, hidden_size: int = 128, num_layers: int = 1, 
+    def __init__(self, model_path: str, hidden_size: int = 128, num_layers: int = 2, 
                  device: Optional[torch.device] = None):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
